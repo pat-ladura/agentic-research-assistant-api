@@ -47,8 +47,8 @@ services:
       OPENAI_API_KEY: '${OPENAI_API_KEY:-}'
       OLLAMA_BASE_URL: 'http://ollama:11434'
     volumes:
-      - ./src:/app/src  # Enable hot reload for source files
-    command: pnpm dev  # Use dev server with file watching
+      - ./src:/app/src # Enable hot reload for source files
+    command: pnpm dev # Use dev server with file watching
     depends_on:
       postgres:
         condition: service_healthy
