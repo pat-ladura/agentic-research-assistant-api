@@ -26,7 +26,7 @@ services:
     ports:
       - '11434:11434'
     volumes:
-      - ollama_data:/root/.ollama
+      - /mnt/e/ollama-data:/root/.ollama
     networks:
       - agentic-network
     environment:
@@ -46,6 +46,9 @@ services:
       API_KEY: 'your-dev-api-key'
       OPENAI_API_KEY: '${OPENAI_API_KEY:-}'
       OLLAMA_BASE_URL: 'http://ollama:11434'
+    volumes:
+      - ./src:/app/src  # Enable hot reload for source files
+    command: pnpm dev  # Use dev server with file watching
     depends_on:
       postgres:
         condition: service_healthy
