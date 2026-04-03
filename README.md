@@ -52,7 +52,7 @@ cp .env.example .env
 
 | Variable          | Required | Description                                         |
 | ----------------- | -------- | --------------------------------------------------- |
-| `PORT`            | ❌       | Server port (default: 3000)                         |
+| `PORT`            | ❌       | Server port (default: 3005)                         |
 | `DATABASE_URL`    | ✅       | PostgreSQL connection string                        |
 | `API_KEY`         | ✅       | API key for request authentication                  |
 | `OPENAI_API_KEY`  | ✅       | OpenAI API key for cloud AI operations              |
@@ -62,7 +62,7 @@ cp .env.example .env
 **Example `.env`**:
 
 ```env
-PORT=3000
+PORT=3005
 DATABASE_URL="postgresql://postgres:postgres@localhost:5432/agentic_research_db"
 API_KEY="your-secure-api-key-here"
 OPENAI_API_KEY="sk-your-openai-api-key-here"
@@ -317,7 +317,7 @@ docker run \
   -e DATABASE_URL="postgresql://postgres:postgres@db:5432/agentic_research_db" \
   -e API_KEY="your-api-key" \
   -e OPENAI_API_KEY="sk-your-key" \
-  -p 3000:3000 \
+  -p 3005:3005 \
   agentic-research-api:latest
 ```
 
@@ -433,8 +433,8 @@ curl http://localhost:11434/api/pull -d '{"name": "llama2"}'
 ### Port Already in Use
 
 ```bash
-# Find and kill process using port 3000
-lsof -i :3000
+# Find and kill process using port 3005
+lsof -i :3005
 kill -9 <PID>
 ```
 

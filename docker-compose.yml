@@ -36,12 +36,13 @@ services:
     build: .
     container_name: agentic-api
     ports:
-      - '3005:3000'
+      - '3005:3005'
     environment:
       NODE_ENV: development
-      PORT: 3000
+      PORT: 3005
       DATABASE_URL: 'postgresql://postgres:postgres@postgres:5432/agentic_research_db'
       API_KEY: 'your-dev-api-key'
+      JWT_SECRET: 'your-super-secret-jwt-key-at-least-32-characters-long-dev-only'
       OPENAI_API_KEY: '${OPENAI_API_KEY:-}'
       OLLAMA_BASE_URL: 'http://ollama:11434'
     volumes:

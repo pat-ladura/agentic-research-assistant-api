@@ -7,7 +7,7 @@ import { closeDb } from './config/database';
 async function main() {
   try {
     const env = getEnv();
-    const app = createApp();
+    const app = await createApp();
 
     await startServer(app, env.PORT);
 
