@@ -7,7 +7,6 @@ import { eq } from 'drizzle-orm';
 import { signJwt, revokedJtis, JwtPayload } from '../middleware/jwt';
 import { logger } from '../lib/logger';
 import jwt from 'jsonwebtoken';
-import { getEnv } from '../config/env';
 
 const router: Router = Router();
 
@@ -69,7 +68,7 @@ const router: Router = Router();
 router.post('/login', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const LoginSchema = z.object({
-      email: z.string().email('Invalid email'),
+      email: z.email('Invalid email'),
       password: z.string().min(1, 'Password is required'),
     });
 
@@ -171,7 +170,6 @@ router.post('/logout', async (req: Request, res: Response, next: NextFunction) =
     }
 
     const token = authHeader.slice(7);
-    const JWT_SECRET = getEnv().JWT_SECRET;
 
     try {
       // Decode the token to get the JTI
