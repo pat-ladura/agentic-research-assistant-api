@@ -82,11 +82,7 @@ router.post('/register', async (req: Request, res: Response, next: NextFunction)
     const db = getDb();
 
     // Check if email already exists
-    const existingUser = await db
-      .select()
-      .from(users)
-      .where(eq(users.email, email))
-      .limit(1);
+    const existingUser = await db.select().from(users).where(eq(users.email, email)).limit(1);
 
     if (existingUser && existingUser.length > 0) {
       logger.info({ email }, 'Registration failed: email already exists');
