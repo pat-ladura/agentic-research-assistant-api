@@ -46,3 +46,24 @@ export interface RequestContext {
   timestamp: Date;
   userAgent?: string;
 }
+
+/**
+ * Authenticated user object
+ */
+export interface AuthUser {
+  id: number;
+  email: string;
+  firstName: string;
+  lastName: string;
+}
+
+/**
+ * Extend Express Request with user property
+ */
+declare global {
+  namespace Express {
+    interface Request {
+      user?: AuthUser;
+    }
+  }
+}

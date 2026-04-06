@@ -1,14 +1,16 @@
-import express, { Application } from 'express';
+import express, { Application, Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import { requestLogger } from './middleware/request-logger';
 import { generalLimiter, aiLimiter } from './middleware/rate-limiter';
-import { authMiddleware } from './middleware/auth';
+import { apiKeyMiddleware } from './middleware/auth';
+import { jwtMiddleware } from './middleware/jwt';
 import { errorHandler } from './middleware/error-handler';
 import { router } from './routes';
+import { swaggerSpec } from './config/swagger';
 import { logger } from './lib/logger';
 
-export function createApp(): Application {
+export async function createApp(): Promise<Application> {
   const app = express();
 
   // Security middleware
@@ -30,8 +32,29 @@ export function createApp(): Application {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });
   });
 
-  // Protect API routes with auth and stricter rate limiting
-  app.use('/api/', authMiddleware);
+  // Swagger documentation (dynamic import for ESM compatibility)
+  try {
+    const swaggerUi = await import('swagger-ui-express');
+    app.use('/api-docs', swaggerUi.default.serve, swaggerUi.default.setup(swaggerSpec));
+  } catch (error) {
+    logger.warn('Swagger UI not available, skipping /api-docs');
+  }
+
+  // API Key middleware - required for all /api routes
+  app.use('/api/', apiKeyMiddleware);
+
+  // Conditional JWT middleware - apply to all /api routes except /auth and /user/register
+  const conditionalJwtMiddleware = (req: Request, res: Response, next: NextFunction) => {
+    const path = req.path;
+    // Skip JWT for /auth and /user/register endpoints
+    if (path.startsWith('/auth') || path === '/user/register') {
+      return next();
+    }
+    // Apply JWT for all other routes
+    return jwtMiddleware(req, res, next);
+  };
+
+  app.use('/api/', conditionalJwtMiddleware);
   app.use('/api/research', aiLimiter);
 
   // Application routes

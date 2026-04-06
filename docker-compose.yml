@@ -36,17 +36,12 @@ services:
     build: .
     container_name: agentic-api
     ports:
-      - '3005:3000'
-    environment:
-      NODE_ENV: development
-      PORT: 3000
-      DATABASE_URL: 'postgresql://postgres:postgres@postgres:5432/agentic_research_db'
-      API_KEY: 'your-dev-api-key'
-      OPENAI_API_KEY: '${OPENAI_API_KEY:-}'
-      OLLAMA_BASE_URL: 'http://ollama:11434'
+      - '3005:3005'
+    env_file:
+      - .env
     volumes:
-      - ./src:/app/src  # Enable hot reload for source files
-    command: pnpm dev  # Use dev server with file watching
+      - ./src:/app/src # Enable hot reload for source files
+    command: pnpm dev # Use dev server with file watching
     depends_on:
       postgres:
         condition: service_healthy

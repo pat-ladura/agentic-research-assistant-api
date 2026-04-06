@@ -3,7 +3,7 @@ import { getEnv } from '../config/env';
 
 const API_KEY = getEnv().API_KEY;
 
-export function authMiddleware(req: Request, res: Response, next: NextFunction) {
+export function apiKeyMiddleware(req: Request, res: Response, next: NextFunction) {
   const apiKey = req.headers['x-api-key'] as string;
 
   if (!apiKey || apiKey !== API_KEY) {

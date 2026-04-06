@@ -1,4 +1,4 @@
-import rateLimit from 'express-rate-limit';
+import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 
 /**
  * General rate limiter: 100 requests per 15 minutes per IP
@@ -10,6 +10,7 @@ export const generalLimiter = rateLimit({
   standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
   legacyHeaders: false, // Disable the `X-RateLimit-*` headers
   skip: (req) => req.path === '/health', // Skip health check endpoint
+  keyGenerator: (req) => ipKeyGenerator(req.ip ?? ''),
 });
 
 /**
@@ -22,10 +23,5 @@ export const aiLimiter = rateLimit({
   message: 'Too many AI requests from this IP, please try again later.',
   standardHeaders: true,
   legacyHeaders: false,
-  keyGenerator: (req) => {
-    // Use x-forwarded-for if available (for proxied requests)
-    return typeof req.headers['x-forwarded-for'] === 'string'
-      ? req.headers['x-forwarded-for'].split(',')[0]
-      : req.ip || 'unknown';
-  },
+  keyGenerator: (req) => ipKeyGenerator(req.ip ?? ''),
 });

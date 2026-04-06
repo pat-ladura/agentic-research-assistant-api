@@ -1,5 +1,20 @@
-import { pgTable, serial, text, timestamp, vector } from 'drizzle-orm/pg-core';
+import { boolean, pgTable, serial, text, timestamp, vector } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
+
+/**
+ * Users table
+ * Stores user accounts; passwords are hashed with bcryptjs before insert
+ */
+export const users = pgTable('users', {
+  id: serial('id').primaryKey(),
+  email: text('email').notNull().unique(),
+  password: text('password').notNull(),
+  firstName: text('first_name').notNull(),
+  lastName: text('last_name').notNull(),
+  isDeleted: boolean('is_deleted').default(false).notNull(),
+  isUpdated: boolean('is_updated').default(false).notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+});
 
 /**
  * Research Sessions table
