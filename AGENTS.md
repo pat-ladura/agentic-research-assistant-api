@@ -8,10 +8,12 @@ Do NOT proceed to the next phase until the current phase is validated.
 
 ## Project Context
 
-- **Stack**: TypeScript, Express 5, Drizzle ORM, PostgreSQL (pgvector), Ollama, OpenAI SDK
+- **Stack**: TypeScript, Express 5, Drizzle ORM, PostgreSQL (pgvector), Ollama, OpenAI SDK, `@google/genai`
 - **Package manager**: pnpm
 - **AI abstraction**: `AIProvider` interface in `src/ai/provider.ts` — all providers must implement `chat()`, `embed()`, `complete()`
 - **Factory**: `src/ai/index.ts` — `getAIProvider(providerType)` returns a provider instance
+- **Providers**: `openai`, `gemini`, `ollama` — all three are first-class selectable options
+- **Hybrid routing**: regardless of provider selection, high-reasoning tasks go to the selected provider; low-reasoning tasks always offload to local Ollama
 - **DB schema**: `src/db/schema/index.ts` — users, researchSessions, documents (with vector column)
 - **Env config**: `src/config/env.ts` — validated via Zod
 
@@ -39,7 +41,7 @@ pnpm add -D @types/pg-boss
 export interface ResearchJobData {
   sessionId: number;
   query: string;
-  provider: 'openai' | 'ollama';
+  provider: 'openai' | 'gemini' | 'ollama';
 }
 
 export interface QueueProvider {
@@ -140,6 +142,7 @@ router.post('/query', async (req, res, next) => {
 ### Validation
 
 - `POST /api/research/query` with `{ sessionId: 1, query: "test", provider: "openai" }` returns HTTP 202 with a `jobId`
+- Repeat with `provider: "gemini"` and `provider: "ollama"` — all return 202
 - Server logs show `Processing research job (placeholder)` shortly after
 - App does not hang waiting for the job to finish
 
@@ -287,7 +290,7 @@ export class ResearcherAgent {
     );
     this.emit('search', 'completed', 'Search queries generated', { searchQueries });
 
-    // Step 3: Summarize (placeholder — Phase 4 adds source fetching + low-reason offload)
+    // Step 3: Summarize (placeholder — Phase 4 replaces this with lowReason = true routing)
     this.emit('summarize', 'started', 'Summarizing available context');
     const summaries = await this.think(
       `Based on your knowledge of the sub-questions and search queries above, provide a brief factual summary for each sub-question. Mark clearly where external verification is needed.`,
@@ -340,58 +343,156 @@ queue.onJob('research-job', async (data, jobId) => {
 
 ---
 
-## Phase 4 — Hybrid Provider (OpenAI + Ollama Routing)
+## Phase 4 — Three Providers + Universal Hybrid Routing
 
 ### Objective
 
-When user selects OpenAI, offload low-reasoning tasks (summarization, keyword extraction, relevance checks) to Ollama (llama3) to reduce cost and latency. When user selects Ollama, all tasks go to Ollama.
+Add Gemini as a first-class provider alongside OpenAI and Ollama. Implement a `HybridProvider` that accepts any primary provider and always offloads low-reasoning tasks to local Ollama — regardless of which provider the user selected. If local Ollama is unavailable, all tasks fall back to the selected primary.
+
+**Routing rules:**
+- User selects `openai` → high-reason: OpenAI Cloud, low-reason: local Ollama (fallback: OpenAI)
+- User selects `gemini` → high-reason: Gemini Cloud, low-reason: local Ollama (fallback: Gemini)
+- User selects `ollama` → high-reason: Ollama Cloud (`OLLAMA_CLOUD_BASE_URL` + `OLLAMA_API_KEY`), low-reason: local Ollama (fallback: Ollama Cloud)
+
+**Low-reasoning tasks** (offloaded to local Ollama): summarization, keyword extraction, relevance checks
+**High-reasoning tasks** (handled by selected provider): decompose, search query generation, synthesis
+
+### Install
+
+```bash
+pnpm add @google/genai
+```
 
 ### Files to modify
 
-**`src/ai/ollama.provider.ts`** — fix model name from `llama2` to `llama3`
+**`src/config/env.ts`** — add Gemini key and Ollama Cloud env vars
 
 ```ts
-private model: string = 'llama3';
+GEMINI_API_KEY: z.string().optional(),
+OLLAMA_API_KEY: z.string().optional(),                                         // already in .env
+OLLAMA_CLOUD_BASE_URL: z.url().optional(),                                     // add to .env
+```
+
+**`src/ai/ollama.provider.ts`** — support both local and cloud modes, fix global env mutation and model name
+
+The current constructor sets `process.env.OLLAMA_HOST` globally — this breaks when running local and cloud instances simultaneously. Replace with per-instance host config:
+
+```ts
+export interface OllamaConfig {
+  cloud?: boolean; // true = Ollama Cloud, false/undefined = local
+}
+
+export class OllamaProvider implements AIProvider {
+  private client: Ollama;
+  private model: string = 'llama3';
+  private embeddingModel: string = 'nomic-embed-text';
+
+  constructor(config: OllamaConfig = {}) {
+    const env = getEnv();
+    if (config.cloud) {
+      if (!env.OLLAMA_CLOUD_BASE_URL) throw new Error('OLLAMA_CLOUD_BASE_URL is not set');
+      this.client = new Ollama({
+        host: env.OLLAMA_CLOUD_BASE_URL,
+        headers: env.OLLAMA_API_KEY ? { Authorization: `Bearer ${env.OLLAMA_API_KEY}` } : {},
+      });
+    } else {
+      // local — do NOT mutate process.env, pass host directly
+      this.client = new Ollama({ host: env.OLLAMA_BASE_URL });
+    }
+  }
+  // ... rest of methods unchanged
+}
 ```
 
 ### Files to create
 
-**`src/ai/hybrid.provider.ts`**
+**`src/ai/gemini.provider.ts`** — Gemini implementation
+
+```ts
+import { GoogleGenAI } from '@google/genai';
+import { AIProvider, ChatMessage } from './provider';
+import { logger } from '../lib/logger';
+import { getEnv } from '../config/env';
+
+export class GeminiProvider implements AIProvider {
+  private client: GoogleGenAI;
+  private model: string = 'gemini-1.5-pro';
+  private embeddingModel: string = 'text-embedding-004'; // 768d
+
+  constructor() {
+    const env = getEnv();
+    if (!env.GEMINI_API_KEY) throw new Error('GEMINI_API_KEY is not set');
+    this.client = new GoogleGenAI({ apiKey: env.GEMINI_API_KEY });
+  }
+
+  async chat(messages: ChatMessage[], systemPrompt?: string): Promise<string> {
+    // Gemini uses 'model' role instead of 'assistant'
+    const geminiMessages = messages.map((m) => ({
+      role: m.role === 'assistant' ? 'model' : 'user',
+      parts: [{ text: m.content }],
+    }));
+
+    const response = await this.client.models.generateContent({
+      model: this.model,
+      systemInstruction: systemPrompt,
+      contents: geminiMessages,
+    });
+
+    const text = response.text;
+    if (!text) throw new Error('No content in Gemini response');
+    logger.debug({ model: this.model }, 'Gemini chat completed');
+    return text;
+  }
+
+  async embed(text: string): Promise<number[]> {
+    const response = await this.client.models.embedContent({
+      model: this.embeddingModel,
+      contents: [{ parts: [{ text }] }],
+    });
+    return response.embeddings?.[0]?.values ?? [];
+  }
+
+  async complete(prompt: string, _maxTokens: number = 256): Promise<string> {
+    return this.chat([{ role: 'user', content: prompt }]);
+  }
+}
+```
+
+**`src/ai/hybrid.provider.ts`** — wraps any primary provider, always offloads low-reason to local Ollama
 
 ```ts
 import { AIProvider, ChatMessage } from './provider';
-import { OpenAIProvider } from './openai.provider';
 import { OllamaProvider } from './ollama.provider';
 import { logger } from '../lib/logger';
 
 export interface ChatOptions {
-  lowReason?: boolean; // true = route to Ollama
+  lowReason?: boolean; // true = route to local Ollama
 }
 
 export class HybridProvider implements AIProvider {
-  private primary: OpenAIProvider;
-  private secondary: OllamaProvider;
-  private ollamaAvailable: boolean = true;
+  private primary: AIProvider;
+  private local: OllamaProvider;
+  private localAvailable: boolean = true;
 
-  constructor() {
-    this.primary = new OpenAIProvider();
-    this.secondary = new OllamaProvider();
+  constructor(primary: AIProvider) {
+    this.primary = primary;
+    this.local = new OllamaProvider({ cloud: false }); // always local for low-reason offload
   }
 
   async chat(messages: ChatMessage[], systemPrompt?: string, opts?: ChatOptions): Promise<string> {
-    if (opts?.lowReason && this.ollamaAvailable) {
+    if (opts?.lowReason && this.localAvailable) {
       try {
-        return await this.secondary.chat(messages, systemPrompt);
+        return await this.local.chat(messages, systemPrompt);
       } catch {
-        logger.warn('Ollama unavailable, falling back to OpenAI for low-reason task');
-        this.ollamaAvailable = false;
+        logger.warn('Local Ollama unavailable, falling back to primary for low-reason task');
+        this.localAvailable = false;
       }
     }
     return this.primary.chat(messages, systemPrompt);
   }
 
   async embed(text: string): Promise<number[]> {
-    return this.primary.embed(text); // Always use OpenAI embeddings in hybrid mode
+    return this.primary.embed(text); // embeddings always from selected provider
   }
 
   async complete(prompt: string, maxTokens?: number): Promise<string> {
@@ -402,26 +503,34 @@ export class HybridProvider implements AIProvider {
 
 ### Files to modify
 
-**`src/ai/index.ts`** — add `HybridProvider` to factory
+**`src/ai/index.ts`** — update ProviderType, wire all three through HybridProvider
 
 ```ts
 import { HybridProvider } from './hybrid.provider';
+import { GeminiProvider } from './gemini.provider';
 
-export type ProviderType = 'ollama' | 'openai' | 'hybrid';
+export type ProviderType = 'openai' | 'gemini' | 'ollama';
 
-// In switch:
+// In switch — every case wraps its provider in HybridProvider:
 case 'openai':
-  provider = new HybridProvider(); // OpenAI as primary, Ollama for low-reason tasks
+  provider = new HybridProvider(new OpenAIProvider());
+  logger.info('Initialized OpenAI provider with local Ollama offload');
+  break;
+case 'gemini':
+  provider = new HybridProvider(new GeminiProvider());
+  logger.info('Initialized Gemini provider with local Ollama offload');
   break;
 case 'ollama':
-  provider = new OllamaProvider(); // All tasks go to Ollama
+  provider = new HybridProvider(new OllamaProvider({ cloud: true }));
+  // primary = Ollama Cloud (high-reason), local offload = local Ollama (low-reason)
+  logger.info('Initialized Ollama Cloud provider with local Ollama offload');
   break;
 ```
 
-**`src/ai/researcher.agent.ts`** — mark summarize step as low-reason
+**`src/ai/researcher.agent.ts`** — add `lowReason` param to `think()`, mark summarize step
 
 ```ts
-// In think(), add optional lowReason param:
+// Update think() signature:
 private async think(userMessage: string, systemPrompt?: string, lowReason = false): Promise<string> {
   this.memory.push({ role: 'user', content: userMessage });
   const provider = getAIProvider(this.providerType) as HybridProvider;
@@ -430,16 +539,21 @@ private async think(userMessage: string, systemPrompt?: string, lowReason = fals
   return response;
 }
 
-// In run(), the summarize step:
-const summaries = await this.think('...summarize prompt...', systemPrompt, true); // lowReason = true
+// In run(), mark the summarize step as low-reason:
+const summaries = await this.think(
+  `Based on your knowledge of the sub-questions and search queries above, provide a brief factual summary for each sub-question. Mark clearly where external verification is needed.`,
+  systemPrompt,
+  true // lowReason — offloads to local Ollama
+);
 ```
 
 ### Validation
 
-- With Ollama running locally: submit a query with `provider: "openai"`
-- Confirm logs show Ollama handling the summarize step and OpenAI handling decompose/synthesize
-- Stop Ollama, resubmit — confirm fallback to OpenAI for all steps without crashing
-- Submit with `provider: "ollama"` — confirm all steps use Ollama
+- Set `GEMINI_API_KEY`, `OLLAMA_API_KEY`, `OLLAMA_CLOUD_BASE_URL` in `.env`
+- Submit queries with each of the three `provider` values: `"openai"`, `"gemini"`, `"ollama"`
+- For all three providers: confirm logs show local Ollama handling the summarize step and the selected provider handling decompose/synthesize
+- Stop local Ollama, resubmit with any provider — confirm all steps fall back to the selected primary without crashing
+- Confirm `provider: "ollama"` routes high-reason steps to Ollama Cloud and low-reason to local Ollama
 
 ---
 
@@ -461,7 +575,7 @@ export const researchSessions = pgTable('research_sessions', {
   userId: integer('user_id').notNull(), // link to authenticated user
   title: text('title').notNull(),
   description: text('description'),
-  provider: text('provider').notNull().default('openai'), // 'openai' | 'ollama'
+  provider: text('provider').notNull().default('openai'), // 'openai' | 'gemini' | 'ollama'
   embeddingModel: text('embedding_model').notNull().default('text-embedding-3-small'),
   embeddingDimensions: integer('embedding_dimensions').notNull().default(1536),
   status: text('status').notNull().default('pending'), // 'pending' | 'running' | 'completed' | 'failed'
@@ -581,103 +695,6 @@ if (relevantChunks.length > 0) {
 
 ---
 
-## Phase 7 — Gemini Provider (Optional / Future)
-
-### Objective
-
-Add Google Gemini as a third provider option without changing any routes, worker, or agent code.
-
-### Install
-
-```bash
-pnpm add @google/genai
-```
-
-### Files to modify
-
-**`src/config/env.ts`** — add optional Gemini key
-
-```ts
-GEMINI_API_KEY: z.string().optional(),
-```
-
-### Files to create
-
-**`src/ai/gemini.provider.ts`**
-
-```ts
-import { GoogleGenAI } from '@google/genai';
-import { AIProvider, ChatMessage } from './provider';
-import { logger } from '../lib/logger';
-import { getEnv } from '../config/env';
-
-export class GeminiProvider implements AIProvider {
-  private client: GoogleGenAI;
-  private model: string = 'gemini-1.5-pro';
-  private embeddingModel: string = 'text-embedding-004'; // 768d
-
-  constructor() {
-    const env = getEnv();
-    if (!env.GEMINI_API_KEY) throw new Error('GEMINI_API_KEY is not set');
-    this.client = new GoogleGenAI({ apiKey: env.GEMINI_API_KEY });
-  }
-
-  async chat(messages: ChatMessage[], systemPrompt?: string): Promise<string> {
-    const geminiMessages = messages.map((m) => ({
-      role: m.role === 'assistant' ? 'model' : 'user', // Gemini uses 'model' not 'assistant'
-      parts: [{ text: m.content }],
-    }));
-
-    const response = await this.client.models.generateContent({
-      model: this.model,
-      systemInstruction: systemPrompt,
-      contents: geminiMessages,
-    });
-
-    const text = response.text;
-    if (!text) throw new Error('No content in Gemini response');
-    logger.debug({ model: this.model }, 'Gemini chat completed');
-    return text;
-  }
-
-  async embed(text: string): Promise<number[]> {
-    const response = await this.client.models.embedContent({
-      model: this.embeddingModel,
-      contents: [{ parts: [{ text }] }],
-    });
-    return response.embeddings?.[0]?.values ?? [];
-  }
-
-  async complete(prompt: string, maxTokens: number = 256): Promise<string> {
-    return this.chat([{ role: 'user', content: prompt }]);
-  }
-}
-```
-
-### Files to modify
-
-**`src/ai/index.ts`** — add `'gemini'` to ProviderType and factory
-
-```ts
-export type ProviderType = 'ollama' | 'openai' | 'gemini';
-
-case 'gemini':
-  provider = new GeminiProvider();
-  logger.info('Initialized Gemini provider (cloud)');
-  break;
-```
-
-Note: Gemini embed produces 768d — same constraint as Ollama. Apply the same session-level `embeddingModel` tracking from Phase 5.
-
-### Validation
-
-- Set `GEMINI_API_KEY` in `.env`
-- Submit a query with `provider: "gemini"`
-- Confirm all 4 research steps complete using Gemini
-- Check embedding dimensions are recorded as 768 in the session
-
----
-
 ## Cross-cutting Rules (apply to all phases)
 
 1. **Never import a concrete provider class outside `src/ai/`** — routes and workers always use `getAIProvider()`
@@ -685,4 +702,6 @@ Note: Gemini embed produces 768d — same constraint as Ollama. Apply the same s
 3. **Provider cache in `getAIProvider()` must be reset via `resetAIProvider()` when switching providers per request** — the current cache is global; consider making it per-request if users can switch mid-session
 4. **SSE connections must clean up event listeners on `req.close`** — already noted in Phase 2
 5. **pg-boss schema tables are managed by pg-boss itself** — do not create them manually via Drizzle
-6. **Ollama must be running for `provider: "ollama"` or hybrid offloading** — always handle Ollama errors gracefully with fallback to OpenAI rather than crashing
+6. **Local Ollama is always the low-reason offload target** — if unavailable, `HybridProvider` falls back to the primary provider silently. Never crash on Ollama unavailability
+7. **`GEMINI_API_KEY` and `OLLAMA_CLOUD_BASE_URL` are optional in env** — their respective providers throw at construction time if keys are missing; the factory only instantiates them when that provider is requested
+8. **Never mutate `process.env.OLLAMA_HOST` globally** — pass host directly to the `Ollama` constructor so local and cloud instances can coexist in the same process
