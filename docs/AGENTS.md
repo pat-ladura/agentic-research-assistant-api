@@ -350,6 +350,7 @@ queue.onJob('research-job', async (data, jobId) => {
 Add Gemini as a first-class provider alongside OpenAI and Ollama. Implement a `HybridProvider` that accepts any primary provider and always offloads low-reasoning tasks to local Ollama — regardless of which provider the user selected. If local Ollama is unavailable, all tasks fall back to the selected primary.
 
 **Routing rules:**
+
 - User selects `openai` → high-reason: OpenAI Cloud, low-reason: local Ollama (fallback: OpenAI)
 - User selects `gemini` → high-reason: Gemini Cloud, low-reason: local Ollama (fallback: Gemini)
 - User selects `ollama` → high-reason: Ollama Cloud (`OLLAMA_CLOUD_BASE_URL` + `OLLAMA_API_KEY`), low-reason: local Ollama (fallback: Ollama Cloud)

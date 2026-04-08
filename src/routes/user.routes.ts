@@ -5,7 +5,12 @@ import { getDb } from '../config/database';
 import { users } from '../db/schema';
 import { eq } from 'drizzle-orm';
 import { logger } from '../lib/logger';
-import { sendSuccess, sendValidationError, sendConflict, sendInternalError } from '../lib/api-response';
+import {
+  sendSuccess,
+  sendValidationError,
+  sendConflict,
+  sendInternalError,
+} from '../lib/api-response';
 
 const router: Router = Router();
 

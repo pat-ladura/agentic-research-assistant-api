@@ -13,10 +13,14 @@ export function errorHandler(err: ApiError, _req: Request, res: Response, _next:
 
   logger.error({ error: err, status, message }, 'Request error');
 
-  const code = status === 404 ? ErrorCode.NOT_FOUND
-    : status === 401 ? ErrorCode.UNAUTHORIZED
-    : status === 403 ? ErrorCode.FORBIDDEN
-    : ErrorCode.INTERNAL_ERROR;
+  const code =
+    status === 404
+      ? ErrorCode.NOT_FOUND
+      : status === 401
+        ? ErrorCode.UNAUTHORIZED
+        : status === 403
+          ? ErrorCode.FORBIDDEN
+          : ErrorCode.INTERNAL_ERROR;
 
   const body: ApiErrorResponse = {
     success: false,

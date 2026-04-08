@@ -75,7 +75,7 @@ export default defineConfig({
 ### `src/index.css` — Tailwind v4 import (replace entire file)
 
 ```css
-@import "tailwindcss";
+@import 'tailwindcss';
 ```
 
 ### Validation
@@ -156,7 +156,9 @@ export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
-        <Suspense fallback={<div className="flex h-screen items-center justify-center">Loading...</div>}>
+        <Suspense
+          fallback={<div className="flex h-screen items-center justify-center">Loading...</div>}
+        >
           <Routes>
             <Route path="/login" element={<LoginPage />} />
             <Route element={<ProtectedRoute />}>
@@ -341,16 +343,14 @@ export const researchApi = {
   createSession: (data: { title: string; description?: string; provider: string }) =>
     apiClient.post('research/sessions', { json: data }).json<ResearchSession>(),
 
-  getSession: (id: number) =>
-    apiClient.get(`research/sessions/${id}`).json<ResearchSession>(),
+  getSession: (id: number) => apiClient.get(`research/sessions/${id}`).json<ResearchSession>(),
 
   submitQuery: (sessionId: number, query: string, provider: string) =>
     apiClient
       .post('research/query', { json: { sessionId, query, provider } })
       .json<{ jobId: string; sessionId: number; status: string }>(),
 
-  getJob: (jobId: string) =>
-    apiClient.get(`research/jobs/${jobId}`).json<ResearchJob>(),
+  getJob: (jobId: string) => apiClient.get(`research/jobs/${jobId}`).json<ResearchJob>(),
 };
 ```
 
@@ -425,11 +425,23 @@ export default function LoginPage() {
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-1">
               <Label htmlFor="email">Email</Label>
-              <Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+              <Input
+                id="email"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+              />
             </div>
             <div className="space-y-1">
               <Label htmlFor="password">Password</Label>
-              <Input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
+              <Input
+                id="password"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+              />
             </div>
             {error && <p className="text-sm text-destructive">{error}</p>}
             <Button type="submit" className="w-full" disabled={loading}>
@@ -645,7 +657,9 @@ export default function NewResearchPage() {
     <div className="mx-auto max-w-2xl space-y-6">
       <div>
         <h1 className="text-2xl font-bold">New Research</h1>
-        <p className="text-muted-foreground">Submit a research query and watch the agent work in real-time.</p>
+        <p className="text-muted-foreground">
+          Submit a research query and watch the agent work in real-time.
+        </p>
       </div>
 
       <Card>
@@ -680,7 +694,8 @@ export default function NewResearchPage() {
                 </SelectContent>
               </Select>
               <p className="text-xs text-muted-foreground">
-                High-reasoning steps use the selected provider. Low-reasoning steps always use local Ollama.
+                High-reasoning steps use the selected provider. Low-reasoning steps always use local
+                Ollama.
               </p>
             </div>
 
@@ -752,7 +767,10 @@ function StepStatus({ step, events }: { step: string; events: JobProgressEvent[]
         <div className="flex items-center gap-2">
           <span className="text-sm font-medium">{STEP_LABELS[step]}</span>
           {latest && (
-            <Badge variant={latest.status === 'completed' ? 'default' : 'secondary'} className="text-xs">
+            <Badge
+              variant={latest.status === 'completed' ? 'default' : 'secondary'}
+              className="text-xs"
+            >
               {latest.status}
             </Badge>
           )}
@@ -767,7 +785,8 @@ export default function JobDetailPage() {
   const { jobId } = useParams<{ jobId: string }>();
   const { events, connected } = useSSE(jobId ?? null);
 
-  const report = events.find((e) => e.step === 'synthesize' && e.status === 'completed')?.data?.report;
+  const report = events.find((e) => e.step === 'synthesize' && e.status === 'completed')?.data
+    ?.report;
   const failed = events.find((e) => e.status === 'failed');
   const isComplete = !!report || !!failed;
 
@@ -856,9 +875,7 @@ export default function SessionsPage() {
   return (
     <div className="space-y-4">
       <h1 className="text-2xl font-bold">Research History</h1>
-      {sessions.length === 0 && (
-        <p className="text-muted-foreground">No research sessions yet.</p>
-      )}
+      {sessions.length === 0 && <p className="text-muted-foreground">No research sessions yet.</p>}
       <div className="space-y-3">
         {sessions.map((session) => (
           <Link key={session.id} to={`/sessions/${session.id}`}>
@@ -872,9 +889,7 @@ export default function SessionsPage() {
                 </div>
                 <div className="flex items-center gap-2">
                   <Badge variant="outline">{session.provider}</Badge>
-                  <Badge
-                    variant={session.status === 'completed' ? 'default' : 'secondary'}
-                  >
+                  <Badge variant={session.status === 'completed' ? 'default' : 'secondary'}>
                     {session.status}
                   </Badge>
                 </div>
@@ -942,7 +957,9 @@ export default function DashboardPage() {
       <div className="grid gap-4 sm:grid-cols-3">
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Total Sessions</CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground">
+              Total Sessions
+            </CardTitle>
           </CardHeader>
           <CardContent>
             <p className="text-3xl font-bold">{sessions.length}</p>
@@ -958,12 +975,16 @@ export default function DashboardPage() {
         </Card>
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Providers Used</CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground">
+              Providers Used
+            </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="flex gap-1 flex-wrap">
               {[...new Set(sessions.map((s) => s.provider))].map((p) => (
-                <Badge key={p} variant="outline">{p}</Badge>
+                <Badge key={p} variant="outline">
+                  {p}
+                </Badge>
               ))}
             </div>
           </CardContent>
