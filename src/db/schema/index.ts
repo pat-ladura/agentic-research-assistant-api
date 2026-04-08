@@ -83,7 +83,10 @@ export const memoryEntries = pgTable('memory_entries', {
   content: text('content').notNull(),
   step: text('step'), // which step this message belongs to
   sequenceOrder: integer('sequence_order').notNull(),
-  embedding: vector('embedding', { dimensions: 1536 }), // semantic search index
+  embeddingModel: text('embedding_model').notNull(), // track which model created this
+  embeddingOpenAI: vector('embedding_openai', { dimensions: 1536 }),
+  embeddingGemini: vector('embedding_gemini', { dimensions: 768 }),
+  embeddingOllama: vector('embedding_ollama', { dimensions: 768 }),
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });
 
@@ -97,7 +100,10 @@ export const documents = pgTable('documents', {
   sessionId: integer('session_id').notNull(),
   title: text('title').notNull(),
   content: text('content').notNull(),
-  embedding: vector('embedding', { dimensions: 1536 }), // OpenAI embedding dimension
+  embeddingModel: text('embedding_model').notNull(), // track which model created this
+  embeddingOpenAI: vector('embedding_openai', { dimensions: 1536 }),
+  embeddingGemini: vector('embedding_gemini', { dimensions: 768 }),
+  embeddingOllama: vector('embedding_ollama', { dimensions: 768 }),
   source: text('source'), // URL, file name, etc.
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });

@@ -8,7 +8,7 @@ export default defineConfig({
   schema: './src/db/schema/index.ts',
   out: './drizzle',
   dbCredentials: {
-    url: env.DATABASE_URL,
+    url: env.DRIZZLE_DATABASE_URL, // Use DRIZZLE_DATABASE_URL for Drizzle's connection, separate from DATABASE_URL used by the app
   },
   verbose: true,
   strict: true,

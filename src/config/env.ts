@@ -3,6 +3,7 @@ import { z } from 'zod';
 const EnvSchema = z.object({
   PORT: z.coerce.number().default(3005),
   DATABASE_URL: z.url('Invalid DATABASE_URL'),
+  DRIZZLE_DATABASE_URL: z.url('Invalid DRIZZLE_DATABASE_URL'),
   API_KEY: z.string().min(1, 'API_KEY is required'),
   JWT_SECRET: z.string().min(32, 'JWT_SECRET must be at least 32 characters'),
   OPENAI_API_KEY: z.string().min(1, 'OPENAI_API_KEY is required'),
