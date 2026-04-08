@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { logger } from '../lib/logger';
+import { ErrorCode, type ApiErrorResponse } from '../lib/api-response';
 
 export interface ApiError extends Error {
   status?: number;
@@ -12,11 +13,19 @@ export function errorHandler(err: ApiError, _req: Request, res: Response, _next:
 
   logger.error({ error: err, status, message }, 'Request error');
 
-  res.status(status).json({
-    error: {
-      status,
-      message,
-      ...(err.body && { body: err.body }),
-    },
-  });
+  const code =
+    status === 404
+      ? ErrorCode.NOT_FOUND
+      : status === 401
+        ? ErrorCode.UNAUTHORIZED
+        : status === 403
+          ? ErrorCode.FORBIDDEN
+          : ErrorCode.INTERNAL_ERROR;
+
+  const body: ApiErrorResponse = {
+    success: false,
+    error: { code, message },
+  };
+
+  res.status(status).json(body);
 }
