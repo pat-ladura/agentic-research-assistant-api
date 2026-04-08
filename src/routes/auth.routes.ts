@@ -7,6 +7,7 @@ import { eq } from 'drizzle-orm';
 import { signJwt, revokedJtis, JwtPayload } from '../middleware/jwt';
 import { logger } from '../lib/logger';
 import jwt from 'jsonwebtoken';
+import { sendSuccess, sendUnauthorized, sendValidationError } from '../lib/api-response';
 
 const router: Router = Router();
 
@@ -80,10 +81,7 @@ router.post('/login', async (req: Request, res: Response, next: NextFunction) =>
 
     if (!user || user.length === 0) {
       logger.info({ email }, 'Login failed: user not found');
-      return res.status(401).json({
-        error: 'Unauthorized',
-        message: 'Invalid email or password',
-      });
+      return sendUnauthorized(res, 'Invalid email or password');
     }
 
     const dbUser = user[0];
@@ -92,10 +90,7 @@ router.post('/login', async (req: Request, res: Response, next: NextFunction) =>
     const isPasswordValid = await bcryptjs.compare(password, dbUser.password);
     if (!isPasswordValid) {
       logger.info({ email }, 'Login failed: invalid password');
-      return res.status(401).json({
-        error: 'Unauthorized',
-        message: 'Invalid email or password',
-      });
+      return sendUnauthorized(res, 'Invalid email or password');
     }
 
     // Generate JWT token
@@ -107,21 +102,22 @@ router.post('/login', async (req: Request, res: Response, next: NextFunction) =>
     });
 
     logger.info({ email }, 'Login successful');
-    res.json({
-      token,
-      user: {
-        id: dbUser.id,
-        email: dbUser.email,
-        firstName: dbUser.firstName,
-        lastName: dbUser.lastName,
+    return sendSuccess(
+      res,
+      {
+        token,
+        user: {
+          id: dbUser.id,
+          email: dbUser.email,
+          firstName: dbUser.firstName,
+          lastName: dbUser.lastName,
+        },
       },
-    });
+      { message: 'Login successful' }
+    );
   } catch (error) {
     if (error instanceof ZodError) {
-      return res.status(400).json({
-        error: 'Validation error',
-        details: error.issues,
-      });
+      return sendValidationError(res, error.issues);
     }
     next(error);
   }
@@ -154,19 +150,13 @@ router.post('/login', async (req: Request, res: Response, next: NextFunction) =>
 router.post('/logout', async (req: Request, res: Response, next: NextFunction) => {
   try {
     if (!req.user) {
-      return res.status(401).json({
-        error: 'Unauthorized',
-        message: 'User not authenticated',
-      });
+      return sendUnauthorized(res, 'User not authenticated');
     }
 
     // Get the token from the Authorization header
     const authHeader = req.headers.authorization;
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return res.status(401).json({
-        error: 'Unauthorized',
-        message: 'Missing or invalid Authorization header',
-      });
+      return sendUnauthorized(res, 'Missing or invalid Authorization header');
     }
 
     const token = authHeader.slice(7);
@@ -183,9 +173,7 @@ router.post('/logout', async (req: Request, res: Response, next: NextFunction) =
       // Continue even if we can't decode
     }
 
-    res.json({
-      message: 'Logout successful',
-    });
+    return sendSuccess(res, null, { message: 'Logout successful' });
   } catch (error) {
     next(error);
   }

@@ -5,6 +5,7 @@ import { getDb } from '../config/database';
 import { users } from '../db/schema';
 import { eq } from 'drizzle-orm';
 import { logger } from '../lib/logger';
+import { sendSuccess, sendValidationError, sendConflict, sendInternalError } from '../lib/api-response';
 
 const router: Router = Router();
 
@@ -86,10 +87,7 @@ router.post('/register', async (req: Request, res: Response, next: NextFunction)
 
     if (existingUser && existingUser.length > 0) {
       logger.info({ email }, 'Registration failed: email already exists');
-      return res.status(400).json({
-        error: 'Validation error',
-        message: 'Email already registered',
-      });
+      return sendConflict(res, 'Email already registered');
     }
 
     // Hash password
@@ -108,29 +106,27 @@ router.post('/register', async (req: Request, res: Response, next: NextFunction)
 
     if (!result || result.length === 0) {
       logger.error({ email }, 'Failed to insert user');
-      return res.status(500).json({
-        error: 'Server error',
-        message: 'Failed to create user',
-      });
+      return sendInternalError(res, 'Failed to create user');
     }
 
     const newUser = result[0];
     logger.info({ email, userId: newUser.id }, 'User registered successfully');
 
-    res.status(201).json({
-      user: {
-        id: newUser.id,
-        email: newUser.email,
-        firstName: newUser.firstName,
-        lastName: newUser.lastName,
+    return sendSuccess(
+      res,
+      {
+        user: {
+          id: newUser.id,
+          email: newUser.email,
+          firstName: newUser.firstName,
+          lastName: newUser.lastName,
+        },
       },
-    });
+      { status: 201, message: 'User registered successfully' }
+    );
   } catch (error) {
     if (error instanceof ZodError) {
-      return res.status(400).json({
-        error: 'Validation error',
-        details: error.issues,
-      });
+      return sendValidationError(res, error.issues);
     }
     next(error);
   }
