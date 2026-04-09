@@ -23,7 +23,8 @@ A TypeScript Express REST API for agentic research assistant with seamless integ
 - Docker & Docker Compose (optional, for local development databases)
 - PostgreSQL 16+ (or use the provided Docker Compose)
 - OpenAI API key (for cloud AI provider)
-- Ollama (for local AI provider, optional)
+- Gemini API key (for cloud AI provider)
+- Ollama (for local and cloud AI provider, optional)
 
 ## 🔧 Setup
 
@@ -50,24 +51,36 @@ cp .env.example .env
 
 **Environment Variables**:
 
-| Variable          | Required | Description                                         |
-| ----------------- | -------- | --------------------------------------------------- |
-| `PORT`            | ❌       | Server port (default: 3005)                         |
-| `DATABASE_URL`    | ✅       | PostgreSQL connection string                        |
-| `API_KEY`         | ✅       | API key for request authentication                  |
-| `OPENAI_API_KEY`  | ✅       | OpenAI API key for cloud AI operations              |
-| `OLLAMA_BASE_URL` | ❌       | Ollama server URL (default: http://localhost:11434) |
-| `NODE_ENV`        | ❌       | Environment: `development` or `production`          |
+| Variable               | Required | Description                                         |
+| ---------------------- | -------- | --------------------------------------------------- |
+| `PORT`                 | ❌       | Server port (default: 3005)                         |
+| `DRIZZLE_DATABASE_URL` | ✅       | PostgreSQL connection string for Drizzle ORM        |
+| `DATABASE_URL`         | ✅       | PostgreSQL connection string                        |
+| `API_KEY`              | ✅       | API key for request authentication                  |
+| `JWT_SECRET`           | ✅       | Secret for signing JWT tokens                       |
+| `OPENAI_API_KEY`       | ❌       | OpenAI API key for cloud AI operations              |
+| `OLLAMA_API_KEY`       | ❌       | Ollama Cloud API key                                |
+| `GEMINI_API_KEY`       | ❌       | Google Gemini API key                               |
+| `OLLAMA_BASE_URL`      | ❌       | Ollama server URL (default: http://localhost:11434) |
+| `NODE_ENV`             | ❌       | Environment: `development` or `production`          |
 
 **Example `.env`**:
 
 ```env
 PORT=3005
-DATABASE_URL="postgresql://postgres:postgres@localhost:5432/agentic_research_db"
-API_KEY="your-secure-api-key-here"
-OPENAI_API_KEY="sk-your-openai-api-key-here"
-OLLAMA_BASE_URL="http://localhost:11434"
-NODE_ENV="development"
+
+DRIZZLE_DATABASE_URL=
+DATABASE_URL=
+
+API_KEY=
+JWT_SECRET=
+
+OPENAI_API_KEY=
+OLLAMA_API_KEY=
+GEMINI_API_KEY=
+OLLAMA_BASE_URL=
+
+NODE_ENV=
 ```
 
 ### 3. Database Setup (Docker Compose)
@@ -179,116 +192,6 @@ GET /api/health/status
 }
 ```
 
-### Research Sessions (Requires API Key)
-
-All research endpoints require `x-api-key` header with your configured API key.
-
-```bash
-# Get all research sessions
-GET /api/research/sessions
--H "x-api-key: your-api-key"
-
-# Create a new session
-POST /api/research/sessions
--H "x-api-key: your-api-key"
--H "Content-Type: application/json"
--d '{ "title": "My Research Session" }'
-
-# Get specific session
-GET /api/research/sessions/:id
--H "x-api-key: your-api-key"
-
-# Submit research query
-POST /api/research/query
--H "x-api-key: your-api-key"
--H "Content-Type: application/json"
--d '{
-  "sessionId": "session-1",
-  "query": "What are embeddings in machine learning?"
-}'
-```
-
-## 🤖 AI Providers
-
-The application supports two AI providers with a unified interface. Switch between them based on your needs.
-
-### Using OpenAI (Cloud)
-
-```typescript
-import { getAIProvider } from '@/ai';
-
-const aiProvider = getAIProvider('openai');
-const response = await aiProvider.chat([{ role: 'user', content: 'Explain quantum computing' }]);
-```
-
-### Using Ollama (Local)
-
-```typescript
-import { getAIProvider } from '@/ai';
-
-const aiProvider = getAIProvider('ollama');
-const response = await aiProvider.chat([{ role: 'user', content: 'Explain quantum computing' }]);
-```
-
-### AI Provider Interface
-
-All providers implement the `AIProvider` interface:
-
-```typescript
-interface AIProvider {
-  chat(messages: ChatMessage[], systemPrompt?: string): Promise<string>;
-  embed(text: string): Promise<number[]>;
-  complete(prompt: string, maxTokens?: number): Promise<string>;
-}
-```
-
-## 🛡️ Authentication & Rate Limiting
-
-### API Key Authentication
-
-All API endpoints (except `/health`) require the `x-api-key` header:
-
-```bash
-curl -H "x-api-key: your-api-key" http://localhost:3000/api/research/sessions
-```
-
-### Rate Limits
-
-- **General**: 100 requests per 15 minutes per IP
-- **AI Endpoints** (`/api/research`): 20 requests per 15 minutes per IP
-
-When rate limit is exceeded, the API returns `429 Too Many Requests` with retry info in headers.
-
-## 📊 Database Schema
-
-### `research_sessions`
-
-```sql
-CREATE TABLE research_sessions (
-  id SERIAL PRIMARY KEY,
-  title TEXT NOT NULL,
-  description TEXT,
-  created_at TIMESTAMP DEFAULT NOW(),
-  updated_at TIMESTAMP DEFAULT NOW()
-);
-```
-
-### `documents`
-
-```sql
-CREATE TABLE documents (
-  id SERIAL PRIMARY KEY,
-  session_id INTEGER NOT NULL,
-  title TEXT NOT NULL,
-  content TEXT NOT NULL,
-  embedding vector(1536),  -- pgvector for semantic search
-  source TEXT,
-  created_at TIMESTAMP DEFAULT NOW()
-);
-```
-
-**Note**: The `embedding` column uses pgvector (1536 dimensions for OpenAI embeddings) for semantic similarity searches.
-
 ## 🐳 Docker Deployment
 
 ### Development with Docker Compose
@@ -304,89 +207,11 @@ docker compose logs -f app
 docker compose down
 ```
 
-### Build Docker Image
-
-```bash
-docker build -t agentic-research-api:latest .
-```
-
-### Run Docker Container
-
-```bash
-docker run \
-  -e DATABASE_URL="postgresql://postgres:postgres@db:5432/agentic_research_db" \
-  -e API_KEY="your-api-key" \
-  -e OPENAI_API_KEY="sk-your-key" \
-  -p 3005:3005 \
-  agentic-research-api:latest
-```
-
 ## 📝 Logging
 
-The application uses Pino for structured JSON logging.
+The application uses Pino for structured JSON logging. Logs are pretty-printed in development and output as JSON in production.
 
-### Development
-
-In development, logs are pretty-printed with colors:
-
-```
-[15:30:45.123] INFO: Server listening on http://localhost:3000
-```
-
-### Production
-
-In production, logs are output as JSON for easy parsing:
-
-```json
-{
-  "level": "info",
-  "time": "2026-04-02T15:30:45.123Z",
-  "msg": "Server listening on http://localhost:3000"
-}
-```
-
-### Custom Logging
-
-```typescript
-import { logger } from '@/lib/logger';
-
-logger.info('User action', { userId: 123, action: 'query_submitted' });
-logger.error(error, 'Failed to process request');
-logger.debug({ data }, 'Debug information');
-```
-
-## 🧪 Testing
-
-Testing framework setup is optional and can be added when needed:
-
-```bash
-pnpm add -D vitest @vitest/ui
-```
-
-## 🔐 Security Best Practices
-
-1. **Environment Variables**: Never commit `.env` files; use `.env.example` as a template
-2. **API Keys**: Rotate API keys regularly; use strong random values
-3. **Helmet**: Enabled by default for security headers
-4. **CORS**: Configured for safe cross-origin requests
-5. **Rate Limiting**: Prevents abuse of AI endpoints
-6. **Input Validation**: Zod schema validation on configuration
-
-## 🚨 Error Handling
-
-All errors are caught globally and returned as JSON:
-
-```json
-{
-  "error": {
-    "status": 400,
-    "message": "Bad Request",
-    "details": { "field": "error details" }
-  }
-}
-```
-
-## 📚 Useful Commands
+## 📄 Available Scripts
 
 ```bash
 # Explore database with Drizzle Studio
@@ -405,53 +230,7 @@ pnpm build
 pnpm dev
 ```
 
-## 🛠️ Troubleshooting
+## 📄 Design Document
 
-### Database Connection Issues
+For architecture decisions, phase-by-phase implementation plan, and system design details, see the [Design Document](https://docs.google.com/document/d/11rSkNOKnMKpk8A2TJ1UzcBPQpkfQdzwgMEzCojZqJ94/edit?usp=drive_link).
 
-```bash
-# Check PostgreSQL is running
-docker compose ps
-
-# View PostgreSQL logs
-docker compose logs postgres
-
-# Manually test connection
-psql "postgresql://postgres:postgres@localhost:5432/agentic_research_db"
-```
-
-### Ollama Connection Issues
-
-```bash
-# Ensure Ollama is running
-curl http://localhost:11434/api/tags
-
-# Pull a model
-curl http://localhost:11434/api/pull -d '{"name": "llama2"}'
-```
-
-### Port Already in Use
-
-```bash
-# Find and kill process using port 3005
-lsof -i :3005
-kill -9 <PID>
-```
-
-## 📖 Resources
-
-- [Express.js Documentation](https://expressjs.com/)
-- [TypeScript Documentation](https://www.typescriptlang.org/)
-- [Drizzle ORM Documentation](https://orm.drizzle.team/)
-- [Pino Logger Documentation](https://getpino.io/)
-- [OpenAI API Documentation](https://platform.openai.com/docs/)
-- [Ollama Documentation](https://ollama.com/)
-- [pgvector Documentation](https://github.com/pgvector/pgvector)
-
-## 📄 License
-
-ISC
-
-## 🤝 Contributing
-
-Contributions welcome! Please follow the existing code style and test before submitting PRs.
