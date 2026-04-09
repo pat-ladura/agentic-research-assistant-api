@@ -211,25 +211,6 @@ docker compose down
 
 The application uses Pino for structured JSON logging. Logs are pretty-printed in development and output as JSON in production.
 
-## 📄 Available Scripts
-
-```bash
-# Explore database with Drizzle Studio
-pnpm db:studio
-
-# Format all code
-pnpm format
-
-# Check if code matches prettier format
-pnpm format:check
-
-# Run TypeScript compiler check
-pnpm build
-
-# Interactive development mode
-pnpm dev
-```
-
 ## 📄 Design Document
 
 For architecture decisions, phase-by-phase implementation plan, and system design details, see the [Design Document](https://docs.google.com/document/d/11rSkNOKnMKpk8A2TJ1UzcBPQpkfQdzwgMEzCojZqJ94/edit?usp=drive_link).
