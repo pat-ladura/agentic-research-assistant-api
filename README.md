@@ -9,7 +9,7 @@ A TypeScript Express REST API for agentic research assistant with seamless integ
 - **Framework**: Express.js
 - **Database**: PostgreSQL with pgvector extension
 - **ORM**: Drizzle ORM with migrations
-- **AI Providers**: Ollama (local) + OpenAI (cloud)
+- **AI Providers**: Ollama (local and cloud), OpenAI (cloud), Gemini (cloud)
 - **Logging**: Pino (structured JSON logging)
 - **Rate Limiting**: express-rate-limit
 - **Code Formatting**: Prettier
@@ -24,7 +24,7 @@ A TypeScript Express REST API for agentic research assistant with seamless integ
 - PostgreSQL 16+ (or use the provided Docker Compose)
 - OpenAI API key (for cloud AI provider)
 - Gemini API key (for cloud AI provider)
-- Ollama (for local and cloud AI provider, optional)
+- Ollama (for local and cloud AI provider)
 
 ## 🔧 Setup
 
